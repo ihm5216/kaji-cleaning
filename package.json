@@ -1,0 +1,20 @@
+{
+  "name": "kaji-cleaning",
+  "version": "1.0.0",
+  "description": "kaji清掃 予約システム",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "nodemailer": "^6.9.0",
+    "qrcode": "^1.5.4",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.0"
+  }
+}
