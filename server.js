@@ -344,6 +344,16 @@ app.post('/api/admin/blocked-slots', (req, res) => {
   const from = timeToMins(fromTime), to = timeToMins(toTime);
   if (from >= to) return res.status(400).json({ error: '終了時刻は開始時刻より後にしてください' });
   if (from < OPEN_HOUR || to > CLOSE_HOUR) return res.status(400).json({ error: `営業時間（${minsToTime(OPEN_HOUR)}〜${minsToTime(CLOSE_HOUR)}）内で設定してください` });
+
+  const conflicting = loadBookings().filter(b => {
+    if (b.date !== date) return false;
+    return overlaps(from, to, timeToMins(b.startTime), timeToMins(b.endTime));
+  });
+  if (conflicting.length > 0) {
+    const names = conflicting.map(b => `${b.startTime}〜${b.endTime} ${b.name}様`).join('、');
+    return res.status(409).json({ error: `この時間帯にすでに予約があります（${names}）。重複しているため設定できません。` });
+  }
+
   const list = loadBlockedSlots();
   const id = uuidv4();
   list.push({ id, date, fromTime, toTime, reason: reason || '', createdAt: new Date().toISOString() });
