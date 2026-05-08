@@ -670,9 +670,9 @@ app.get('/admin', (req, res) => {
 <div class="form-box">
   <h2>📞 電話予約を登録する</h2>
   <div class="form-grid">
-    <label>日付 *<input type="date" id="pDate"></label>
+    <label>日付 *<input type="date" id="pDate" onchange="updatePhoneTimeSlots()"></label>
     <label>開始時間 *<select id="pTime">${timeOptionsHtml}</select></label>
-    <label style="grid-column:1/-1">サービス *<select id="pSvc">${svcOptionsHtml}</select></label>
+    <label style="grid-column:1/-1">サービス *<select id="pSvc" onchange="updatePhoneTimeSlots()">${svcOptionsHtml}</select></label>
     <label>お名前 *<input type="text" id="pName" placeholder="山田 太郎"></label>
     <label>電話番号 *<input type="tel" id="pPhone" placeholder="090-0000-0000"></label>
     <label style="grid-column:1/-1">住所<input type="text" id="pAddress" placeholder="津山市〇〇 1-2-3"></label>
@@ -953,6 +953,38 @@ function renderDayTimeline(dateStr, bks) {
 function tlMins(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
 
 // ===== 予約登録 =====
+async function updatePhoneTimeSlots() {
+  const date = document.getElementById('pDate').value;
+  const serviceId = document.getElementById('pSvc').value;
+  const sel = document.getElementById('pTime');
+  const prev = sel.value;
+  if (!date || !serviceId) return;
+  const res = await fetch('/api/availability?date=' + date + '&serviceId=' + serviceId);
+  const data = await res.json();
+  sel.innerHTML = '';
+  if (data.closed || !data.slots || data.slots.length === 0) {
+    sel.innerHTML = '<option value="" disabled selected>この日は予約不可</option>';
+    return;
+  }
+  data.slots.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.time;
+    if (!s.available) {
+      opt.textContent = s.time + '　━━ 選択できません';
+      opt.disabled = true;
+      opt.style.color = '#aaa';
+    } else {
+      opt.textContent = s.time;
+    }
+    sel.appendChild(opt);
+  });
+  if ([...sel.options].some(o => !o.disabled && o.value === prev)) sel.value = prev;
+  else {
+    const first = [...sel.options].find(o => !o.disabled);
+    if (first) sel.value = first.value;
+  }
+}
+
 async function registerBooking(source) {
   const date     = document.getElementById('pDate').value;
   const startTime= document.getElementById('pTime').value;
