@@ -691,11 +691,11 @@ app.get('/admin', (req, res) => {
     <div class="acal-wd">土</div>
   </div>
   <div id="adminCalGrid"></div>
-  <div class="day-timeline" id="dayTimeline"></div>
   <div class="day-detail" id="dayDetail">
     <h3 id="dayDetailTitle"></h3>
     <div id="dayDetailCards"></div>
   </div>
+  <div class="day-timeline" id="dayTimeline"></div>
 </div>
 
 <!-- 電話予約 -->
