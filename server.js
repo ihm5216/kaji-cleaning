@@ -277,6 +277,107 @@ app.delete('/api/admin/cancel/:id', (req, res) => {
   res.json({ success: true });
 });
 
+// POST /api/admin/booking/:id/complete
+app.post('/api/admin/booking/:id/complete', (req, res) => {
+  const bookings = loadBookings();
+  const idx = bookings.findIndex(b => b.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ error: '予約が見つかりません' });
+  bookings[idx].status = 'completed';
+  bookings[idx].completedAt = new Date().toISOString();
+  saveBookings(bookings);
+  res.json({ success: true });
+});
+
+// GET /admin/customers
+app.get('/admin/customers', (req, res) => {
+  const bookings = loadBookings();
+  const completed = bookings.filter(b => b.status === 'completed');
+
+  // 電話番号でグループ化
+  const map = {};
+  for (const b of completed) {
+    const key = b.phone || b.name;
+    if (!map[key]) {
+      map[key] = { name: b.name, phone: b.phone || '—', address: b.address || '—', bookings: [] };
+    }
+    map[key].bookings.push(b);
+    // 最新の名前・住所で更新
+    map[key].name = b.name;
+    if (b.address) map[key].address = b.address;
+  }
+
+  const customers = Object.values(map).sort((a, b) => {
+    const aLast = a.bookings[a.bookings.length - 1].date;
+    const bLast = b.bookings[b.bookings.length - 1].date;
+    return bLast.localeCompare(aLast);
+  });
+
+  const rows = customers.map(c => {
+    const total = c.bookings.reduce((s, b) => s + (b.price || 0), 0);
+    const lastDate = c.bookings.slice().sort((a,b) => b.date.localeCompare(a.date))[0].date;
+    const historyRows = c.bookings.slice().sort((a,b) => b.date.localeCompare(a.date)).map(b =>
+      \`<tr style="font-size:0.8rem">
+        <td style="padding:4px 8px">\${b.date}</td>
+        <td style="padding:4px 8px">\${b.startTime}〜\${b.endTime}</td>
+        <td style="padding:4px 8px">\${b.serviceName || '—'}</td>
+        <td style="padding:4px 8px">¥\${(b.price||0).toLocaleString()}</td>
+      </tr>\`
+    ).join('');
+    return \`
+    <div class="cust-card" onclick="this.querySelector('.cust-history').classList.toggle('open')">
+      <div class="cust-header">
+        <div class="cust-name">\${c.name} 様</div>
+        <div class="cust-meta">\${c.phone} ／ \${c.address}</div>
+      </div>
+      <div class="cust-stats">
+        <span class="cust-stat">利用 <b>\${c.bookings.length}回</b></span>
+        <span class="cust-stat">合計 <b>¥\${total.toLocaleString()}</b></span>
+        <span class="cust-stat">最終 <b>\${lastDate}</b></span>
+      </div>
+      <div class="cust-history">
+        <table style="width:100%;border-collapse:collapse;margin-top:8px">
+          <thead><tr style="font-size:0.75rem;color:#888">
+            <th style="padding:4px 8px;text-align:left">日付</th>
+            <th style="padding:4px 8px;text-align:left">時間</th>
+            <th style="padding:4px 8px;text-align:left">サービス</th>
+            <th style="padding:4px 8px;text-align:left">料金</th>
+          </tr></thead>
+          <tbody>\${historyRows}</tbody>
+        </table>
+      </div>
+    </div>\`;
+  }).join('');
+
+  res.send(\`<!DOCTYPE html>
+<html lang="ja"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>顧客リスト — \${BUSINESS_NAME}</title>
+<style>
+*{box-sizing:border-box;}
+body{font-family:'Hiragino Sans',sans-serif;margin:0;padding:24px;background:#f0f6fc;color:#333;}
+h1{font-size:1.3rem;color:#155fa0;margin:0 0 6px;}
+.back-link{display:inline-block;margin-bottom:20px;color:#1e7fcb;font-size:0.85rem;text-decoration:none;}
+.back-link:hover{text-decoration:underline;}
+.cust-card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(30,127,203,.1);padding:16px 20px;margin-bottom:14px;cursor:pointer;transition:box-shadow .15s;}
+.cust-card:hover{box-shadow:0 3px 12px rgba(30,127,203,.18);}
+.cust-header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+.cust-name{font-size:1.05rem;font-weight:700;color:#155fa0;}
+.cust-meta{font-size:0.82rem;color:#777;}
+.cust-stats{display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;}
+.cust-stat{font-size:0.82rem;color:#555;background:#f0f7ff;padding:3px 10px;border-radius:20px;}
+.cust-stat b{color:#1e7fcb;}
+.cust-history{display:none;border-top:1px solid #e8f0f8;margin-top:10px;padding-top:8px;}
+.cust-history.open{display:block;}
+.empty{text-align:center;padding:40px;color:#aaa;font-size:0.9rem;}
+</style></head><body>
+<h1>👥 顧客リスト</h1>
+<a class="back-link" href="/admin">← 管理画面に戻る</a>
+\${customers.length === 0
+  ? '<div class="empty">完了済みの予約がまだありません。<br>予約を完了にすると顧客リストに反映されます。</div>'
+  : \`<p style="font-size:0.85rem;color:#888;margin-bottom:16px">顧客数：\${customers.length}名（クリックで利用履歴を展開）</p>\` + rows}
+</body></html>\`);
+});
+
 // GET /api/admin/calendar?year=YYYY&month=MM
 app.get('/api/admin/calendar', (req, res) => {
   const year = parseInt(req.query.year);
@@ -389,8 +490,10 @@ app.get('/admin', (req, res) => {
   const srcRowClass = s => s === 'phone' ? 'phone-row' : '';
 
   const rows = upcoming.length
-    ? upcoming.map(b => `
-        <tr class="${srcRowClass(b.source)}">
+    ? upcoming.map(b => {
+        const isDone = b.status === 'completed';
+        return `
+        <tr class="${srcRowClass(b.source)}${isDone ? ' completed-row' : ''}">
           <td data-label="日付">${b.date}</td>
           <td data-label="時間">${b.startTime}〜${b.endTime}</td>
           <td data-label="お名前">${b.name}</td>
@@ -401,10 +504,13 @@ app.get('/admin', (req, res) => {
           <td data-label="経路">${srcBadge(b.source)}</td>
           <td data-label="支払い">${payBadge(b.paymentMethod)}</td>
           <td data-label="操作" style="white-space:nowrap">
-            <button onclick="editBooking('${b.id}','${b.date}','${b.startTime}','${b.serviceId || ''}')" class="edit-btn">✏️ 編集</button>
-            <button onclick="cancel('${b.id}')" class="cancel-btn" style="margin-left:4px">✕ キャンセル</button>
+            ${isDone ? '<span style="font-size:0.75rem;color:#2e7d32;font-weight:600;">✅ 完了済</span>' : `
+            <button onclick="completeBooking('${b.id}')" class="complete-btn">✅ 完了</button>
+            <button onclick="editBooking('${b.id}','${b.date}','${b.startTime}','${b.serviceId || ''}')" class="edit-btn" style="margin-left:4px">✏️ 編集</button>
+            <button onclick="cancel('${b.id}')" class="cancel-btn" style="margin-left:4px">✕ キャンセル</button>`}
           </td>
-        </tr>`).join('')
+        </tr>`;
+      }).join('')
     : '<tr><td colspan="10" style="text-align:center;padding:20px;color:#999">予約はありません</td></tr>';
 
   // 時間オプション（30分刻み）
@@ -508,6 +614,8 @@ app.get('/admin', (req, res) => {
     .day-detail.open{display:block;}
     .day-detail h3{font-size:0.95rem;color:#155fa0;margin:0 0 10px;}
     .bk-card{background:#f0f7ff;border:1px solid #c5dff5;border-radius:8px;padding:12px 14px;margin-bottom:8px;position:relative;}
+    .bk-card.completed{background:#f5f5f5;border-color:#ddd;opacity:0.65;}
+    .bk-card.completed .bk-time{color:#999;text-decoration:line-through;}
     .bk-time{font-weight:700;font-size:1rem;color:#1e7fcb;margin-bottom:4px;}
     .bk-info{font-size:0.82rem;color:#555;line-height:1.7;}
     .bk-btns{position:absolute;top:10px;right:10px;display:flex;gap:6px;}
@@ -515,6 +623,11 @@ app.get('/admin', (req, res) => {
     .bk-cancel:hover{background:#fff0f0;}
     .bk-edit{background:none;border:1px solid #a0c0f5;color:#1e7fcb;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:background .15s;}
     .bk-edit:hover{background:#e8f4ff;}
+    .bk-complete{background:none;border:1px solid #81c784;color:#2e7d32;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:background .15s;}
+    .bk-complete:hover{background:#e8f5e9;}
+    .complete-btn{background:none;border:1px solid #81c784;color:#2e7d32;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;white-space:nowrap;}
+    .complete-btn:hover{background:#e8f5e9;}
+    tr.completed-row td{background:#f5f5f5;color:#aaa;text-decoration:line-through;}
 
     /* フォームボックス */
     .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px 14px;margin-bottom:14px;}
@@ -670,7 +783,10 @@ app.get('/admin', (req, res) => {
   </style>
 </head>
 <body>
-<h1>📋 予約管理 — ${BUSINESS_NAME}</h1>
+<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+  <h1 style="margin:0">📋 予約管理 — ${BUSINESS_NAME}</h1>
+  <a href="/admin/customers" style="background:#1e7fcb;color:#fff;padding:7px 16px;border-radius:7px;text-decoration:none;font-size:0.85rem;font-weight:600;">👥 顧客リスト</a>
+</div>
 
 <!-- 新着通知エリア -->
 <div id="notifArea"></div>
@@ -945,7 +1061,7 @@ function selectCalDay(dateStr, bks) {
     cards.innerHTML = '<p style="color:#999;font-size:0.85rem">この日の予約はありません</p>';
   } else {
     cards.innerHTML = bks.map(b => \`
-      <div class="bk-card">
+      <div class="bk-card\${b.status === 'completed' ? ' completed' : ''}">
         <div class="bk-time">\${b.startTime}〜\${b.endTime}</div>
         <div class="bk-info">
           \${b.name} 様 / \${b.phone||'—'}<br>
@@ -954,10 +1070,12 @@ function selectCalDay(dateStr, bks) {
           \${b.notes ? '備考：'+b.notes+'<br>' : ''}
           <span style="font-size:0.75rem;color:#999">経路: \${b.source==='phone'?'電話':b.source==='walkin'?'飛び込み':'Web'}</span>
         </div>
+        \${b.status === 'completed' ? '<div style="font-size:0.8rem;color:#2e7d32;font-weight:600;margin-top:6px;">✅ 完了済み</div>' : \`
         <div class="bk-btns">
+          <button class="bk-complete" onclick="completeBooking('\${b.id}')">✅ 完了</button>
           <button class="bk-edit" onclick="editBooking('\${b.id}','\${b.date}','\${b.startTime}','\${b.serviceId||''}')">✏️ 編集</button>
           <button class="bk-cancel" onclick="cancel('\${b.id}')">✕ キャンセル</button>
-        </div>
+        </div>\`}
       </div>\`).join('');
   }
   detail.classList.add('open');
@@ -1131,6 +1249,15 @@ async function registerBooking(source) {
   if (!res.ok) return alert(data.error || '登録に失敗しました');
   alert('登録しました！');
   loadCalData();
+  location.reload();
+}
+
+// ===== 完了 =====
+async function completeBooking(id) {
+  if (!confirm('この予約を完了にしますか？\n完了すると顧客リストに反映されます。')) return;
+  const res = await fetch('/api/admin/booking/' + id + '/complete', { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) return alert(data.error || 'エラーが発生しました');
   location.reload();
 }
 
