@@ -400,7 +400,10 @@ app.get('/admin', (req, res) => {
           <td data-label="料金">¥${(b.price||0).toLocaleString()}</td>
           <td data-label="経路">${srcBadge(b.source)}</td>
           <td data-label="支払い">${payBadge(b.paymentMethod)}</td>
-          <td data-label="操作"><button onclick="cancel('${b.id}')" class="cancel-btn">✕ キャンセル</button></td>
+          <td data-label="操作" style="white-space:nowrap">
+            <button onclick="editBooking('${b.id}','${b.date}','${b.startTime}','${b.serviceId || ''}')" class="edit-btn">✏️ 編集</button>
+            <button onclick="cancel('${b.id}')" class="cancel-btn" style="margin-left:4px">✕ キャンセル</button>
+          </td>
         </tr>`).join('')
     : '<tr><td colspan="10" style="text-align:center;padding:20px;color:#999">予約はありません</td></tr>';
 
@@ -546,6 +549,22 @@ app.get('/admin', (req, res) => {
     .badge-credit{background:#f3e5f5;color:#6a1b9a;}
     .cancel-btn{background:none;border:1px solid #f5a0a0;color:#c04040;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;white-space:nowrap;}
     .cancel-btn:hover{background:#fff0f0;}
+    .edit-btn{background:none;border:1px solid #a0c0f5;color:#1e7fcb;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;white-space:nowrap;}
+    .edit-btn:hover{background:#e8f4ff;}
+
+    /* 編集モーダル */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:9000;align-items:center;justify-content:center;}
+    .modal-overlay.open{display:flex;}
+    .modal-box{background:#fff;border-radius:12px;padding:28px 28px 22px;width:90%;max-width:460px;box-shadow:0 8px 32px rgba(0,0,0,0.18);}
+    .modal-title{font-size:1.05rem;font-weight:700;color:#155fa0;margin:0 0 18px;}
+    .modal-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;font-size:0.82rem;color:#888;}
+    .modal-field input,.modal-field select{padding:8px 10px;border:1.5px solid #d1e4f5;border-radius:7px;font-size:0.9rem;color:#333;background:#fff;width:100%;}
+    .modal-field input:focus,.modal-field select:focus{outline:none;border-color:#1e7fcb;}
+    .modal-btns{display:flex;gap:10px;justify-content:flex-end;margin-top:18px;}
+    .modal-save-btn{padding:9px 22px;background:#1e7fcb;color:#fff;border:none;border-radius:7px;font-size:0.88rem;font-weight:600;cursor:pointer;}
+    .modal-save-btn:hover{background:#155fa0;}
+    .modal-cancel-btn{padding:9px 18px;background:none;border:1.5px solid #ddd;color:#666;border-radius:7px;font-size:0.88rem;cursor:pointer;}
+    .modal-cancel-btn:hover{background:#f5f5f5;}
 
     /* デイリータイムライン */
     .day-timeline{margin-top:18px;display:none;}
@@ -730,6 +749,30 @@ app.get('/admin', (req, res) => {
       </tr></thead>
       <tbody id="bookingTableBody">${rows}</tbody>
     </table>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div class="modal-overlay" id="editModal" onclick="if(event.target===this)closeEditModal()">
+  <div class="modal-box">
+    <div class="modal-title">✏️ 予約を編集する</div>
+    <input type="hidden" id="editId">
+    <div class="modal-field">
+      <label>日付 *</label>
+      <input type="date" id="editDate" onchange="updateEditTimeSlots()">
+    </div>
+    <div class="modal-field">
+      <label>開始時間 *</label>
+      <select id="editTime"></select>
+    </div>
+    <div class="modal-field">
+      <label>サービス *</label>
+      <select id="editSvc" onchange="updateEditTimeSlots()">${svcOptionsHtml}</select>
+    </div>
+    <div class="modal-btns">
+      <button class="modal-cancel-btn" onclick="closeEditModal()">キャンセル</button>
+      <button class="modal-save-btn" onclick="saveEditBooking()">保存する</button>
+    </div>
   </div>
 </div>
 
@@ -963,6 +1006,72 @@ function renderDayTimeline(dateStr, bks) {
 function tlMins(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
 
 // ===== 予約登録 =====
+// ===== 編集モーダル =====
+async function editBooking(id, date, startTime, serviceId) {
+  document.getElementById('editId').value = id;
+  document.getElementById('editDate').value = date;
+  if (serviceId) document.getElementById('editSvc').value = serviceId;
+  await updateEditTimeSlots(startTime);
+  document.getElementById('editModal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').classList.remove('open');
+}
+
+async function updateEditTimeSlots(selectTime) {
+  const date = document.getElementById('editDate').value;
+  const serviceId = document.getElementById('editSvc').value;
+  const id = document.getElementById('editId').value;
+  const sel = document.getElementById('editTime');
+  const prev = selectTime || sel.value;
+  if (!date || !serviceId) return;
+  const res = await fetch('/api/availability?date=' + date + '&serviceId=' + serviceId);
+  const data = await res.json();
+  sel.innerHTML = '';
+  if (data.closed || !data.slots || data.slots.length === 0) {
+    sel.innerHTML = '<option value="" disabled selected>この日は予約不可</option>';
+    return;
+  }
+  data.slots.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.time;
+    if (!s.available) {
+      opt.textContent = s.time + '　━━ 選択できません';
+      opt.disabled = true;
+      opt.style.color = '#aaa';
+    } else {
+      opt.textContent = s.time;
+    }
+    sel.appendChild(opt);
+  });
+  // 現在の予約時間は重複チェックから除外されているので選べるようにする
+  const target = [...sel.options].find(o => o.value === prev);
+  if (target) { target.disabled = false; target.textContent = target.textContent.replace('　━━ 選択できません', ''); sel.value = prev; }
+  else {
+    const first = [...sel.options].find(o => !o.disabled);
+    if (first) sel.value = first.value;
+  }
+}
+
+async function saveEditBooking() {
+  const id = document.getElementById('editId').value;
+  const date = document.getElementById('editDate').value;
+  const startTime = document.getElementById('editTime').value;
+  const serviceId = document.getElementById('editSvc').value;
+  if (!date || !startTime || !serviceId) return alert('日付・時間・サービスは必須です');
+  const res = await fetch('/api/admin/booking/' + id, {
+    method: 'PUT',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ date, startTime, serviceId }),
+  });
+  const data = await res.json();
+  if (!res.ok) return alert(data.error || '保存に失敗しました');
+  alert('更新しました！');
+  closeEditModal();
+  location.reload();
+}
+
 async function updatePhoneTimeSlots() {
   const date = document.getElementById('pDate').value;
   const serviceId = document.getElementById('pSvc').value;
