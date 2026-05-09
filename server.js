@@ -293,15 +293,11 @@ app.get('/admin/customers', (req, res) => {
   const bookings = loadBookings();
   const completed = bookings.filter(b => b.status === 'completed');
 
-  // 電話番号でグループ化
   const map = {};
   for (const b of completed) {
     const key = b.phone || b.name;
-    if (!map[key]) {
-      map[key] = { name: b.name, phone: b.phone || '—', address: b.address || '—', bookings: [] };
-    }
+    if (!map[key]) map[key] = { name: b.name, phone: b.phone || '—', address: b.address || '—', bookings: [] };
     map[key].bookings.push(b);
-    // 最新の名前・住所で更新
     map[key].name = b.name;
     if (b.address) map[key].address = b.address;
   }
@@ -312,70 +308,71 @@ app.get('/admin/customers', (req, res) => {
     return bLast.localeCompare(aLast);
   });
 
-  const rows = customers.map(c => {
+  let rows = '';
+  for (const c of customers) {
     const total = c.bookings.reduce((s, b) => s + (b.price || 0), 0);
-    const lastDate = c.bookings.slice().sort((a,b) => b.date.localeCompare(a.date))[0].date;
-    const historyRows = c.bookings.slice().sort((a,b) => b.date.localeCompare(a.date)).map(b =>
-      \`<tr style="font-size:0.8rem">
-        <td style="padding:4px 8px">\${b.date}</td>
-        <td style="padding:4px 8px">\${b.startTime}〜\${b.endTime}</td>
-        <td style="padding:4px 8px">\${b.serviceName || '—'}</td>
-        <td style="padding:4px 8px">¥\${(b.price||0).toLocaleString()}</td>
-      </tr>\`
-    ).join('');
-    return \`
-    <div class="cust-card" onclick="this.querySelector('.cust-history').classList.toggle('open')">
-      <div class="cust-header">
-        <div class="cust-name">\${c.name} 様</div>
-        <div class="cust-meta">\${c.phone} ／ \${c.address}</div>
-      </div>
-      <div class="cust-stats">
-        <span class="cust-stat">利用 <b>\${c.bookings.length}回</b></span>
-        <span class="cust-stat">合計 <b>¥\${total.toLocaleString()}</b></span>
-        <span class="cust-stat">最終 <b>\${lastDate}</b></span>
-      </div>
-      <div class="cust-history">
-        <table style="width:100%;border-collapse:collapse;margin-top:8px">
-          <thead><tr style="font-size:0.75rem;color:#888">
-            <th style="padding:4px 8px;text-align:left">日付</th>
-            <th style="padding:4px 8px;text-align:left">時間</th>
-            <th style="padding:4px 8px;text-align:left">サービス</th>
-            <th style="padding:4px 8px;text-align:left">料金</th>
-          </tr></thead>
-          <tbody>\${historyRows}</tbody>
-        </table>
-      </div>
-    </div>\`;
-  }).join('');
+    const sorted = c.bookings.slice().sort((a, b) => b.date.localeCompare(a.date));
+    const lastDate = sorted[0].date;
+    let historyRows = '';
+    for (const b of sorted) {
+      historyRows += '<tr style="font-size:0.8rem">'
+        + '<td style="padding:4px 8px">' + b.date + '</td>'
+        + '<td style="padding:4px 8px">' + b.startTime + '〜' + b.endTime + '</td>'
+        + '<td style="padding:4px 8px">' + (b.serviceName || '—') + '</td>'
+        + '<td style="padding:4px 8px">¥' + (b.price || 0).toLocaleString() + '</td>'
+        + '</tr>';
+    }
+    rows += '<div class="cust-card" onclick="this.querySelector(\'.cust-history\').classList.toggle(\'open\')">'
+      + '<div class="cust-header">'
+      + '<div class="cust-name">' + c.name + ' 様</div>'
+      + '<div class="cust-meta">' + c.phone + ' ／ ' + c.address + '</div>'
+      + '</div>'
+      + '<div class="cust-stats">'
+      + '<span class="cust-stat">利用 <b>' + c.bookings.length + '回</b></span>'
+      + '<span class="cust-stat">合計 <b>¥' + total.toLocaleString() + '</b></span>'
+      + '<span class="cust-stat">最終 <b>' + lastDate + '</b></span>'
+      + '</div>'
+      + '<div class="cust-history">'
+      + '<table style="width:100%;border-collapse:collapse;margin-top:8px">'
+      + '<thead><tr style="font-size:0.75rem;color:#888">'
+      + '<th style="padding:4px 8px;text-align:left">日付</th>'
+      + '<th style="padding:4px 8px;text-align:left">時間</th>'
+      + '<th style="padding:4px 8px;text-align:left">サービス</th>'
+      + '<th style="padding:4px 8px;text-align:left">料金</th>'
+      + '</tr></thead>'
+      + '<tbody>' + historyRows + '</tbody>'
+      + '</table></div></div>';
+  }
 
-  res.send(\`<!DOCTYPE html>
-<html lang="ja"><head><meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>顧客リスト — \${BUSINESS_NAME}</title>
-<style>
-*{box-sizing:border-box;}
-body{font-family:'Hiragino Sans',sans-serif;margin:0;padding:24px;background:#f0f6fc;color:#333;}
-h1{font-size:1.3rem;color:#155fa0;margin:0 0 6px;}
-.back-link{display:inline-block;margin-bottom:20px;color:#1e7fcb;font-size:0.85rem;text-decoration:none;}
-.back-link:hover{text-decoration:underline;}
-.cust-card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(30,127,203,.1);padding:16px 20px;margin-bottom:14px;cursor:pointer;transition:box-shadow .15s;}
-.cust-card:hover{box-shadow:0 3px 12px rgba(30,127,203,.18);}
-.cust-header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
-.cust-name{font-size:1.05rem;font-weight:700;color:#155fa0;}
-.cust-meta{font-size:0.82rem;color:#777;}
-.cust-stats{display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;}
-.cust-stat{font-size:0.82rem;color:#555;background:#f0f7ff;padding:3px 10px;border-radius:20px;}
-.cust-stat b{color:#1e7fcb;}
-.cust-history{display:none;border-top:1px solid #e8f0f8;margin-top:10px;padding-top:8px;}
-.cust-history.open{display:block;}
-.empty{text-align:center;padding:40px;color:#aaa;font-size:0.9rem;}
-</style></head><body>
-<h1>👥 顧客リスト</h1>
-<a class="back-link" href="/admin">← 管理画面に戻る</a>
-\${customers.length === 0
-  ? '<div class="empty">完了済みの予約がまだありません。<br>予約を完了にすると顧客リストに反映されます。</div>'
-  : \`<p style="font-size:0.85rem;color:#888;margin-bottom:16px">顧客数：\${customers.length}名（クリックで利用履歴を展開）</p>\` + rows}
-</body></html>\`);
+  const body = customers.length === 0
+    ? '<div class="empty">完了済みの予約がまだありません。<br>予約を完了にすると顧客リストに反映されます。</div>'
+    : '<p style="font-size:0.85rem;color:#888;margin-bottom:16px">顧客数：' + customers.length + '名（クリックで利用履歴を展開）</p>' + rows;
+
+  res.send('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'
+    + '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    + '<title>顧客リスト — ' + BUSINESS_NAME + '</title>'
+    + '<style>'
+    + '*{box-sizing:border-box;}'
+    + 'body{font-family:\'Hiragino Sans\',sans-serif;margin:0;padding:24px;background:#f0f6fc;color:#333;}'
+    + 'h1{font-size:1.3rem;color:#155fa0;margin:0 0 6px;}'
+    + '.back-link{display:inline-block;margin-bottom:20px;color:#1e7fcb;font-size:0.85rem;text-decoration:none;}'
+    + '.back-link:hover{text-decoration:underline;}'
+    + '.cust-card{background:#fff;border-radius:10px;box-shadow:0 1px 6px rgba(30,127,203,.1);padding:16px 20px;margin-bottom:14px;cursor:pointer;transition:box-shadow .15s;}'
+    + '.cust-card:hover{box-shadow:0 3px 12px rgba(30,127,203,.18);}'
+    + '.cust-header{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}'
+    + '.cust-name{font-size:1.05rem;font-weight:700;color:#155fa0;}'
+    + '.cust-meta{font-size:0.82rem;color:#777;}'
+    + '.cust-stats{display:flex;gap:16px;margin-top:8px;flex-wrap:wrap;}'
+    + '.cust-stat{font-size:0.82rem;color:#555;background:#f0f7ff;padding:3px 10px;border-radius:20px;}'
+    + '.cust-stat b{color:#1e7fcb;}'
+    + '.cust-history{display:none;border-top:1px solid #e8f0f8;margin-top:10px;padding-top:8px;}'
+    + '.cust-history.open{display:block;}'
+    + '.empty{text-align:center;padding:40px;color:#aaa;font-size:0.9rem;}'
+    + '</style></head><body>'
+    + '<h1>👥 顧客リスト</h1>'
+    + '<a class="back-link" href="/admin">← 管理画面に戻る</a>'
+    + body
+    + '</body></html>');
 });
 
 // GET /api/admin/calendar?year=YYYY&month=MM
