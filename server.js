@@ -510,8 +510,11 @@ app.get('/admin', (req, res) => {
     .bk-card{background:#f0f7ff;border:1px solid #c5dff5;border-radius:8px;padding:12px 14px;margin-bottom:8px;position:relative;}
     .bk-time{font-weight:700;font-size:1rem;color:#1e7fcb;margin-bottom:4px;}
     .bk-info{font-size:0.82rem;color:#555;line-height:1.7;}
-    .bk-cancel{position:absolute;top:10px;right:10px;background:none;border:1px solid #f5a0a0;color:#c04040;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:background .15s;}
+    .bk-btns{position:absolute;top:10px;right:10px;display:flex;gap:6px;}
+    .bk-cancel{background:none;border:1px solid #f5a0a0;color:#c04040;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:background .15s;}
     .bk-cancel:hover{background:#fff0f0;}
+    .bk-edit{background:none;border:1px solid #a0c0f5;color:#1e7fcb;border-radius:5px;padding:3px 10px;font-size:0.75rem;cursor:pointer;transition:background .15s;}
+    .bk-edit:hover{background:#e8f4ff;}
 
     /* フォームボックス */
     .form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px 14px;margin-bottom:14px;}
@@ -951,7 +954,10 @@ function selectCalDay(dateStr, bks) {
           \${b.notes ? '備考：'+b.notes+'<br>' : ''}
           <span style="font-size:0.75rem;color:#999">経路: \${b.source==='phone'?'電話':b.source==='walkin'?'飛び込み':'Web'}</span>
         </div>
-        <button class="bk-cancel" onclick="cancel('\${b.id}')">✕ キャンセル</button>
+        <div class="bk-btns">
+          <button class="bk-edit" onclick="editBooking('\${b.id}','\${b.date}','\${b.startTime}','\${b.serviceId||''}')">✏️ 編集</button>
+          <button class="bk-cancel" onclick="cancel('\${b.id}')">✕ キャンセル</button>
+        </div>
       </div>\`).join('');
   }
   detail.classList.add('open');
