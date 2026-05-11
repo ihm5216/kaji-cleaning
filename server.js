@@ -1251,7 +1251,7 @@ async function registerBooking(source) {
 
 // ===== 完了 =====
 async function completeBooking(id) {
-  if (!confirm('この予約を完了にしますか？\n完了すると顧客リストに反映されます。')) return;
+  if (!confirm('この予約を完了にしますか？\\n完了すると顧客リストに反映されます。')) return;
   const res = await fetch('/api/admin/booking/' + id + '/complete', { method: 'POST' });
   const data = await res.json();
   if (!res.ok) return alert(data.error || 'エラーが発生しました');
